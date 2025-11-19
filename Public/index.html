@@ -1,0 +1,86 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>SupportOps MVP</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; max-width: 900px; margin: auto; }
+    header { display:flex; justify-content:space-between; align-items:center; margin-bottom: 18px; }
+    input[type="text"]{ padding:8px; width:320px; }
+    button{ padding:8px 12px; margin-left:8px; }
+    .ticket{ border:1px solid #ddd; padding:10px; margin-bottom:8px; border-radius:6px; }
+    .meta{ color:#666; font-size:12px; margin-top:6px; }
+    .badge { background:#007bff;color:#fff;padding:4px 8px;border-radius:6px;font-size:12px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>SupportOps MVP</h1>
+    <div class="badge" id="status">Not connected</div>
+  </header>
+
+  <form id="createForm">
+    <input id="title" type="text" placeholder="New ticket title (try 'Customer cannot login')" />
+    <button>Create Ticket</button>
+  </form>
+
+  <h2>Tickets</h2>
+  <div id="tickets"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io(); // connects to same origin
+
+    const statusEl = document.getElementById('status');
+    socket.on('connect', () => { statusEl.textContent = 'Connected'; statusEl.style.background = '#28a745'; });
+    socket.on('disconnect', () => { statusEl.textContent = 'Disconnected'; statusEl.style.background = '#dc3545'; });
+
+    const ticketsEl = document.getElementById('tickets');
+    let tickets = [];
+
+    function renderTickets() {
+      ticketsEl.innerHTML = '';
+      if (!tickets.length) {
+        ticketsEl.innerHTML = '<div>No tickets yet</div>';
+        return;
+      }
+      tickets.forEach(t => {
+        const d = document.createElement('div');
+        d.className = 'ticket';
+        d.innerHTML = '<strong>' + escapeHtml(t.title) + '</strong>' +
+                      '<div class="meta">' + t.status + ' • ' + new Date(t.createdAt).toLocaleString() + '</div>';
+        ticketsEl.appendChild(d);
+      });
+    }
+
+    function escapeHtml(s){ return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
+
+    socket.on('init', data => {
+      tickets = data.tickets || [];
+      renderTickets();
+    });
+
+    socket.on('ticket:new', t => {
+      tickets.unshift(t);
+      renderTickets();
+    });
+
+    document.getElementById('createForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const title = document.getElementById('title').value.trim();
+      if (!title) return alert('Please type a title');
+      try {
+        await fetch('/api/tickets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title })
+        });
+        document.getElementById('title').value = '';
+      } catch (err) {
+        alert('Error creating ticket: ' + err.message);
+      }
+    });
+  </script>
+</body>
+</html>
